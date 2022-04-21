@@ -1,0 +1,482 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="/projects/spacefire/style/spacefire_style.css">
+        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+        <link rel="shortcut icon" href="/projects/spacefire/images/spaceship.png">
+        <title> Spacefire </title>
+
+    </head>
+    <body>
+
+        <div id="playerStatusBox">
+            <span id="playerCoins"></span>
+        </div>
+
+        <canvas id="canvas"></canvas>
+
+        <div id="playerUpgradesBox">
+
+        </div>
+
+        <script>
+
+            function random(min, max) { // Gera um número aleatório entre min e max.
+                const num = Math.floor(Math.random() * (max - min + 1)) + min;
+                return num;
+            }
+
+            const fireSound = new Audio("/projects/spacefire/audio/fireSound.mp3");
+            const enemyShipExplosionSound = new Audio("/projects/spacefire/audio/enemyShipExplosionSound.mp3");
+            const enemyBulletColisionSound = new Audio("/projects/spacefire/audio/enemyBulletColisionSound.mp3");
+            const canvas = document.querySelector("canvas");
+            const ctx = canvas.getContext("2d");
+            const canvasWidth = canvas.width = 800;
+            const canvasHeight = canvas.height = window.innerHeight;
+            const margin = (window.innerWidth - canvasWidth) / 2;
+
+            let gameSong = new Audio("/projects/spacefire/audio/songs/song"+random(1, 15)+".mp3");
+            let cursorOffsetX = 500;
+            let cursorOffsetY = 0;
+            let enemyFireFrequency = 1000;
+            let enemyFireFrequencyMinus = 1;
+            let menuStats = true;
+
+            let bullets = [];
+            let enemyBullets = [];
+            let enemyShips = [];
+            let allBonus = [];
+
+            let spaceship = {
+                spaceshipIMG: new Image(),
+                spaceshipWidth: 40,
+                spaceshipHeight: 40,
+                spaceshipOffsetX: cursorOffsetX,
+                spaceshipOffsetY: canvasHeight/100*92,
+                spaceshipAutoFire: true,
+                spaceshipFireDelay: 1000,
+            }
+            spaceship.spaceshipIMG.src = "/projects/spacefire/images/spaceship.png";
+
+            let playerStatus = {
+                playerScore: 0,
+                playerReloadFrequency: 1000/spaceship.spaceshipFireDelay,
+            }
+
+            let canvasFrame = 1;
+
+        </script>
+
+        <script type="text/javascript" src="/projects/spacefire/functions/gif.js"></script>
+        <script type="text/javascript" src="/projects/spacefire/functions/control.js"></script>
+
+        <script>
+
+            document.getElementById("playerStatusBox").style.width = margin;
+            document.getElementById("playerUpgradesBox").style.width = margin;
+
+            setTimeout(autoFire, spaceship.spaceshipFireDelay);
+            setTimeout(autoEnemyFire, enemyFireFrequency);
+
+            spawnEnemyShip();
+
+            // ------------------------------------ LISTEN ---------------------------------------- //
+
+            function playEnemyShipExplosionSound(){ // Reproduz o som de explosão das naves inimigas
+                enemyShipExplosionSound.currentTime = 0.2;
+                enemyShipExplosionSound.play();
+            }
+
+            function playFireSound(){ // Reproduz o som dos disparos da nave princiapal
+                fireSound.currentTime = 0.3;
+                fireSound.play();
+            }
+
+            function playEnemyBulletColisionSound(){ // Reproduz o som de colisão dos projéteis inimigos
+                enemyBulletColisionSound.volume = 0.01;
+                enemyBulletColisionSound.play();
+            }
+
+            // ------------------------------------ DRAW ---------------------------------------- //
+
+            function drawBonus(){ // Renderiza os bônus
+                for(i=0; i<allBonus.length; i++){
+                    allBonus[i].bonusOffsetY += 2;
+                    ctx.drawImage( allBonus[i].bonusIMG, allBonus[i].bonusOffsetX, allBonus[i].bonusOffsetY, allBonus[i].bonusWidth, allBonus[i].bonusHeight );
+                    if(allBonus[i].bonusOffsetY > canvasHeight){
+                        allBonus.splice(i,1);
+                    }
+                }
+            }
+
+            function drawPlayerStatus(){ // Renderiza os status do jogador
+                ctx.fillStyle = "white";
+                ctx.font = "25px impact";
+                ctx.fillText("Score: "+playerStatus.playerScore, 20, 40);
+                ctx.fillText(playerStatus.playerReloadFrequency, 20, 80);
+                ctx.fillText("Enemy Reload: "+(1000/enemyFireFrequency).toFixed(2)+"/s", 20, 120);
+            }
+
+            function drawSpaceship(){ // Renderiza a nave do jogador
+                ctx.drawImage( spaceship.spaceshipIMG, spaceship.spaceshipOffsetX, spaceship.spaceshipOffsetY, spaceship.spaceshipWidth, spaceship.spaceshipHeight );
+            }
+
+            function drawEnemyShips(){ // Renderiza as naves inimigas
+                for ( i=0; i<enemyShips.length; i++ ){
+                    ctx.drawImage( enemyShips[i].enemyIMG, enemyShips[i].enemyOffsetX, enemyShips[i].enemyOffsetY, enemyShips[i].enemyWidth, enemyShips[i].enemyHeight );
+                }
+            }
+
+            function drawBullets(){ // Renderiza os projéteis da nave principal
+                for( i=0; i<bullets.length; i++ ){
+                    bullets[i].bulletOffsetY -= bullets[i].bulletSpeed;
+                    ctx.fillStyle = bullets[i].bulletColor;
+                    ctx.fillRect( bullets[i].bulletOffsetX - (bullets[i].bulletWidth/2) , bullets[i].bulletOffsetY, bullets[i].bulletWidth, bullets[i].bulletHeight );
+                    if( bullets[i].bulletOffsetY < 0 ){
+                        bullets.splice(i, 1);
+                    }
+                }
+            }
+
+            function drawEnemyBullets(){ // Renderiza os projéteis das naves inimigas
+                for( i=0; i<enemyBullets.length; i++ ){
+                    if( enemyBullets[i].enemyBulletType == 0 ){
+                        enemyBullets[i].enemyBulletOffsetY += enemyBullets[i].enemyBulletSpeed;
+                        enemyBullets[i].enemyBulletOffsetX -= enemyBullets[i].enemyBulletSpeed/2;
+                    }
+                    if( enemyBullets[i].enemyBulletType == 1 ){
+                        enemyBullets[i].enemyBulletOffsetY += enemyBullets[i].enemyBulletSpeed;
+                    }
+                    if( enemyBullets[i].enemyBulletType == 2 ){
+                        enemyBullets[i].enemyBulletOffsetY += enemyBullets[i].enemyBulletSpeed;
+                        enemyBullets[i].enemyBulletOffsetX += enemyBullets[i].enemyBulletSpeed/2;
+                    }
+                    ctx.fillStyle = enemyBullets[i].enemyBulletColor;
+                    ctx.fillRect( enemyBullets[i].enemyBulletOffsetX - (enemyBullets[i].enemyBulletWidth/2) , enemyBullets[i].enemyBulletOffsetY, enemyBullets[i].enemyBulletWidth, enemyBullets[i].enemyBulletHeight );
+                    if( enemyBullets[i].enemyBulletOffsetY > canvasHeight ){
+                        enemyBullets.splice(i, 1);
+                    }
+                }
+            }
+
+            function DrawCleanScreen(){ // Limpa o frame renderizando tela preta
+                ctx.fillStyle = "rgba(20, 20, 20, 1)";
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            }
+
+            function drawExplosionGIFs(){ // Renderiza as animações das explosões
+                for(i=1; i<explosions.length; i++){
+                    ctx.drawImage( explosionGif[explosions[i].frame], explosions[i].x-15, explosions[i].y-15, explosions[i].width+30, explosions[i].height+30 );
+                    if(explosions[i].frame == 25){ // Deleta o gif de explosão se ele já tiver terminado.
+                        explosions.splice(i, 1);
+                    } else {
+                        explosions[i].frame++;
+                    }
+                }
+            }
+
+            function drawBackgroundGIF(){  // Renderiza a animação de background
+                ctx.drawImage( backgroundGif[backgroundGifFrame], 0, 0, canvasWidth, canvasHeight );
+                ctx.fillStyle = "rgba(20, 20, 20, 0.8)";
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+                backgroundGifFrame++;
+                if(backgroundGifFrame == 300){backgroundGifFrame = 1}
+            }
+
+            function drawMenu(){ // Renderiza a tela do menu principal
+                ctx.fillStyle = "rgba(20, 20, 20, 0.05)";
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                ctx.fillStyle = "white";
+                ctx.fillRect(((canvasWidth/2)-150), (canvasHeight/100*40), 300, 50);
+                ctx.lineJoin = "round";
+                ctx.linecanvasWidth = 20;
+                ctx.fillStyle = "black";
+                ctx.font = "35px impact";
+                ctx.fillText("JOGAR", canvasWidth/2-40, (canvasHeight/100*40)+40);
+
+                ctx.fillStyle = "white";
+                ctx.fillRect(((canvasWidth/2)-150), (canvasHeight/100*50), 300, 50);
+                ctx.lineJoin = "round";
+                ctx.linecanvasWidth = 20;
+                ctx.fillStyle = "black";
+                ctx.font = "35px impact";
+                ctx.fillText("OPÇÕES", canvasWidth/2-50, (canvasHeight/100*50)+40);
+
+                ctx.fillStyle = "white";
+                ctx.fillRect(((canvasWidth/2)-150), (canvasHeight/100*60), 300, 50);
+                ctx.lineJoin = "round";
+                ctx.linecanvasWidth = 20;
+                ctx.fillStyle = "black";
+                ctx.font = "35px impact";
+                ctx.fillText("SAIR", canvasWidth/2-30, (canvasHeight/100*60)+40);
+            }
+
+            function drawEnemySpaceshipsGifs(){ // Renderiza a animação das naves inimigas
+                for(i=0; i<enemyShips.length; i++){      
+                    enemyShips[i].enemyIMG = enemySpaceshipGif[enemyShips[i].enemyGifFrame];
+                    if( canvasFrame % 4 == 0 ){
+                        enemyShips[i].enemyGifFrame++;
+                    }
+                    if(enemyShips[i].enemyGifFrame == 3){enemyShips[i].enemyGifFrame = 1}
+                }
+            }
+
+            // ------------------------------------- SPAWN ---------------------------------------- //
+
+            function spawnBonus(rand, enemyShip){ // Cria um objeto bonus no vetor allBonus
+                if( rand <= 10 ){
+                    let bonus = {
+                        bonusIMG: new Image(),
+                        bonusWidth: 20,
+                        bonusHeight: 20,
+                        bonusOffsetX: enemyShips[enemyShip].enemyOffsetX,
+                        bonusOffsetY: enemyShips[enemyShip].enemyOffsetY+50,
+                    }
+                    bonus.bonusIMG.src = "/projects/spacefire/images/up.png";
+                    allBonus.push(bonus);
+                }
+            }
+
+            function createExplosion(PosX, PosY, Width, Height){ // Cria um objeto explosion no vetor explosions
+                let explosion = {
+                    x: PosX,
+                    y: PosY,
+                    width: Width,
+                    height: Height,
+                    frame: 1,
+                    count: 1,
+                }
+                explosions.push(explosion);
+            }
+
+            function enemyFire(enemyShip){ // Cria objetos enemyBullet no vetor enemyBullets
+                if(enemyShips.length > 0){
+                    var enemyBullet = {
+                        enemyBulletOffsetX: enemyShips[enemyShip].enemyOffsetX + enemyShips[enemyShip].enemyWidth/2,
+                        enemyBulletOffsetY: 90,
+                        enemyBulletSpeed: 4,
+                        enemyBulletWidth: 5,
+                        enemyBulletHeight: 5,
+                        enemyBulletColor: "white",
+                        enemyBulletType: 0,
+                    };
+                    enemyBullets.push(enemyBullet);
+                    var enemyBullet = {
+                        enemyBulletOffsetX: enemyShips[enemyShip].enemyOffsetX + enemyShips[enemyShip].enemyWidth/2,
+                        enemyBulletOffsetY: 90,
+                        enemyBulletSpeed: 4,
+                        enemyBulletWidth: 5,
+                        enemyBulletHeight: 5,
+                        enemyBulletColor: "white",
+                        enemyBulletType: 1,
+                    };
+                    enemyBullets.push(enemyBullet);
+                    var enemyBullet = {
+                        enemyBulletOffsetX: enemyShips[enemyShip].enemyOffsetX + enemyShips[enemyShip].enemyWidth/2,
+                        enemyBulletOffsetY: 90,
+                        enemyBulletSpeed: 4,
+                        enemyBulletWidth: 5,
+                        enemyBulletHeight: 5,
+                        enemyBulletColor: "white",
+                        enemyBulletType: 2,
+                    };
+                    enemyBullets.push(enemyBullet);   
+                }
+            }
+
+            function fire(){ // Cria um objeto bullet no vetor bullets
+                playFireSound();
+                let bullet = {
+                    bulletOffsetX: cursorOffsetX,
+                    bulletOffsetY: spaceship.spaceshipOffsetY-spaceship.spaceshipHeight/2/2,
+                    bulletSpeed: 8,
+                    bulletWidth: 4,
+                    bulletHeight: 10,
+                    bulletColor: "#b193db",
+                };
+                bullets.push(bullet);
+            }
+
+            function spawnEnemyShip(){ // Cria um objeto enemy no vetor enemyShips
+                let aux = 0;
+                let enemy = {
+                    enemyIMG: new Image(),
+                    enemyWidth: 60,
+                    enemyHeight: 50,
+                    enemyOffsetX: random(50, canvasWidth-50),
+                    enemyOffsetY: 50,
+                    enemyDirection: random(50, canvasWidth-50),
+                    enemySpeed: 2,
+                    enemyAux: true,
+                    enemyGifFrame: 1,
+                };
+                enemy.enemyIMG.src = "/projects/spacefire/images/enemySpaceshipGIF/fnum1.png";
+                enemyShips.push(enemy);
+            }
+
+            // ------------------------------------- RULES ---------------------------------------- //
+            
+            function moveEnemyShips(){ // Realiza a movimentação das naves inimigas.
+                for ( i=0; i<enemyShips.length; i++ ){
+                    
+                    // ------------------ Movimentação horizontal ---------------------------------
+                    
+                    if( enemyShips[i].enemyOffsetX < enemyShips[i].enemyDirection ){
+                        enemyShips[i].enemyOffsetX += enemyShips[i].enemySpeed;
+                    } else if( enemyShips[i].enemyOffsetX > enemyShips[i].enemyDirection ){
+                        enemyShips[i].enemyOffsetX -= enemyShips[i].enemySpeed;
+                    }
+                    if( (enemyShips[i].enemyOffsetX > enemyShips[i].enemyDirection - enemyShips[i].enemySpeed * 2 ) && ( enemyShips[i].enemyOffsetX < enemyShips[i].enemyDirection + enemyShips[i].enemySpeed * 2) ){
+                        enemyShips[i].enemyDirection = random(50, canvasWidth-50);
+                    }
+
+                    // ------------------ Movimentação vertical ---------------------------------
+                    
+                    if( enemyShips[i].enemyAux == true ){
+                        enemyShips[i].enemyOffsetY += 0.3;
+                    } else if( enemyShips[i].enemyAux == false ){
+                        enemyShips[i].enemyOffsetY -= 0.3;
+                    }
+                    
+                    if( enemyShips[i].enemyOffsetY > 55){
+                        enemyShips[i].enemyAux = false;
+                    } else if( enemyShips[i].enemyOffsetY < 45 ){
+                        enemyShips[i].enemyAux = true;
+                    }
+                    
+                }
+            }
+            
+            function verifyEnemyBulletColision(){ // Verifica se há colisão do projétil inimigo
+                for( i=0; i<enemyBullets.length; i++ ){
+                    if( ( enemyBullets[i].enemyBulletOffsetX + enemyBullets[i].enemyBulletWidth >= spaceship.spaceshipOffsetX ) &&
+                    ( enemyBullets[i].enemyBulletOffsetX <= spaceship.spaceshipOffsetX + spaceship.spaceshipWidth ) &&
+                    ( enemyBullets[i].enemyBulletOffsetY >= spaceship.spaceshipOffsetY ) && 
+                    ( enemyBullets[i].enemyBulletOffsetY <= spaceship.spaceshipOffsetY + spaceship.spaceshipHeight ) ){
+                        playEnemyBulletColisionSound();
+                        enemyBullets.splice(i, 1);
+                    }
+                }
+            }
+            
+            function verifyBonusObtaining(){ // Verifica se há obtenção do bônus
+                for( i=0; i<allBonus.length; i++ ){
+                    if( ( allBonus[i].bonusOffsetX + allBonus[i].bonusWidth >= spaceship.spaceshipOffsetX ) &&
+                    ( allBonus[i].bonusOffsetX <= spaceship.spaceshipOffsetX + spaceship.spaceshipWidth ) &&
+                    ( allBonus[i].bonusOffsetY >= spaceship.spaceshipOffsetY ) && 
+                    ( allBonus[i].bonusOffsetY <= spaceship.spaceshipOffsetY + spaceship.spaceshipHeight ) ){
+                        allBonus.splice(i, 1);
+                        if(playerStatus.playerReloadFrequency > 100){
+                            playerStatus.playerReloadFrequency -= 100;
+                        }
+                        playerStatus.playerReloadFrequency = (1000/playerStatus.playerReloadFrequency).toFixed(1);
+                    }
+                }
+            }
+
+            function verifyBulletColision(){ // Verifica se há colisão do projétil da nave principal
+                if(enemyShips.length > 0){
+                    for( j=0; j<enemyShips.length; j++ ){
+                        for( i=0; i<bullets.length; i++ ){
+                            // Para cada enemy, verifica se há colisão com alguma das bullets.
+                            if( ( bullets[i].bulletOffsetX + bullets[i].bulletWidth >= enemyShips[j].enemyOffsetX ) &&
+                            ( bullets[i].bulletOffsetX <= enemyShips[j].enemyOffsetX+enemyShips[j].enemyWidth ) &&
+                            ( bullets[i].bulletOffsetY >= enemyShips[j].enemyOffsetY ) && 
+                            ( bullets[i].bulletOffsetY <= enemyShips[j].enemyOffsetY+enemyShips[j].enemyHeight ) ){
+                                playEnemyShipExplosionSound();
+                                createExplosion(enemyShips[j].enemyOffsetX, enemyShips[j].enemyOffsetY, enemyShips[j].enemyWidth, enemyShips[j].enemyHeight);
+                                spawnBonus(random(0, 10), j);
+                                enemyShips.splice(j, 1);
+                                bullets.splice(i, 1);
+                                playerStatus.playerScore++;
+                                enemyFireFrequency -= enemyFireFrequency/1000;
+                                spawnEnemyShip();
+                            }
+                        }
+                    }
+                }
+            }
+
+            function autoEnemyFire(){ // Realiza disparos inimigos periodicamente
+                if( menuStats == false ){
+                    enemyFire(random(0, enemyShips.length-1));
+                }
+                setTimeout(autoEnemyFire, enemyFireFrequency);
+            }
+
+            function autoFire(){ // Realiza disparos da nave principal periodicamente
+                if(spaceship.spaceshipAutoFire == true && menuStats == false){
+                    fire();
+                }
+                setTimeout(autoFire, spaceship.spaceshipFireDelay);
+            }
+            
+            // ------------------------------------- GAMBIARRAs ---------------------------------------- //
+
+            function detectCanvasFrame(){ // Controla os frames
+                canvasFrame++;
+                if(canvasFrame == 100){
+                    canvasFrame = 1;
+                }
+            }
+
+            // ------------------------------------- CONTROL ---------------------------------------- //
+
+            function whenPressEsc(){ 
+                if( data.keyCode == 27 ){
+                    if( menuStats == true ){
+                        menuStats = false;
+                        canvas.style.cursor = "none";
+                        //gameSong.play();
+                    } else if ( menuStats == false ){
+                        menuStats = true;
+                        canvas.style.cursor = "auto";
+                        gameSong.pause();
+                    }
+                }
+            }
+
+            canvas.addEventListener('contextmenu', event => event.preventDefault());
+            // Desabilita a função do botão direito.
+
+            // -------------------------------------- MAIN ---------------------------------------- //
+
+            function render(){ // ---------------- Função de renderização.
+                
+                if(menuStats == true){
+                    
+                    drawMenu();
+                    
+                } else if(menuStats == false){
+                    
+                    detectCanvasFrame();
+                    
+                    DrawCleanScreen();
+                    
+                    verifyBulletColision();
+                    verifyBonusObtaining();
+                    verifyEnemyBulletColision();
+                    
+                    drawBackgroundGIF();
+                    drawPlayerStatus();
+                    drawSpaceship();
+                    drawEnemyShips();
+                    drawBullets();
+                    drawEnemyBullets();
+                    drawBonus();
+                    drawExplosionGIFs();
+                    drawEnemySpaceshipsGifs();
+
+                    moveEnemyShips();
+
+                }
+    
+                requestAnimationFrame(render);
+            }
+
+            render();
+
+        </script>
+
+    </body>
+</html>
