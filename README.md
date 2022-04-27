@@ -1,1 +1,1 @@
-readme alterado
+Jogo de nave espacial em canvas js
